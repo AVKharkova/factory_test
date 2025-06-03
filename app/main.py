@@ -1,12 +1,21 @@
-from fastapi import FastAPI, Depends
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Depends, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
 from sqlalchemy.orm import Session
 
-from .database import Base, get_db
+from .database import get_db
 from .routers import factories, sections, equipment, hierarchy
-from . import models
+from .exceptions import (
+    NotFoundError,
+    DuplicateError,
+    RelatedEntityNotFoundError,
+)
 
 app = FastAPI(title='Справочники API')
+app.mount('/static', StaticFiles(directory='app/static'), name='static')
+
 
 # Подключение роутеров
 app.include_router(factories.router)
@@ -14,7 +23,29 @@ app.include_router(sections.router)
 app.include_router(equipment.router)
 app.include_router(hierarchy.router)
 
-# HTML форма
+
+# Обработчики исключений
+@app.exception_handler(NotFoundError)
+async def not_found_error_handler(request: Request, exc: NotFoundError):
+    return JSONResponse(status_code=404, content={'detail': str(exc)})
+
+
+@app.exception_handler(DuplicateError)
+async def duplicate_error_handler(request: Request, exc: DuplicateError):
+    return JSONResponse(status_code=400, content={'detail': str(exc)})
+
+
+@app.exception_handler(RelatedEntityNotFoundError)
+async def related_entity_error_handler(request: Request, exc: RelatedEntityNotFoundError):
+    return JSONResponse(status_code=400, content={'detail': str(exc)})
+
+
+# Иконка, чтобы не надоедал с ошибкой
+@app.get('/favicon.ico', include_in_schema=False)
+async def favicon():
+    return FileResponse('app/static/favicon.ico')
+
+# HTML интерфейс
 html_content = '''
 <!DOCTYPE html>
 <html>
@@ -23,25 +54,25 @@ html_content = '''
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
         .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        h1, h2 { color: #333; border-bottom: 2px solid #4CAF50; padding-bottom: 10px;}
-        form { margin-bottom: 30px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9;}
+        h1, h2 { color: #333; border-bottom: 2px solid #4CAF50; padding-bottom: 10px; }
+        form { margin-bottom: 30px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9; }
         label { display: block; margin-top: 10px; font-weight: bold; }
-        input[type="text"], input[type="number"], select { 
-            margin-top: 5px; 
-            width: calc(100% - 22px); 
-            padding: 10px; 
-            border: 1px solid #ccc; 
+        input[type="text"], input[type="number"], select {
+            margin-top: 5px;
+            width: calc(100% - 22px);
+            padding: 10px;
+            border: 1px solid #ccc;
             border-radius: 4px;
             box-sizing: border-box;
         }
-        button { 
-            margin-top: 15px; 
-            padding: 10px 15px; 
-            background-color: #4CAF50; 
-            color: white; 
-            border: none; 
-            border-radius: 4px; 
-            cursor: pointer; 
+        button {
+            margin-top: 15px;
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
             font-size: 16px;
         }
         button:hover { background-color: #45a049; }
@@ -95,7 +126,7 @@ html_content = '''
 
         <h2>Создать Оборудование</h2>
         <form action="/equipment/" method="post" target="response_iframe">
-            <label for="equipmentgm_name">Наименование оборудования:</label>
+            <label for="equipment_name">Наименование оборудования:</label>
             <input type="text" id="equipment_name" name="name" required>
             <label for="equipment_description">Описание оборудования (опционально):</label>
             <input type="text" id="equipment_description" name="description">
@@ -128,19 +159,11 @@ html_content = '''
 
 @app.get('/', response_class=HTMLResponse, tags=['UI'])
 async def get_ui_form():
-    """Возвращает HTML-форму для управления справочниками.
-
-    Returns:
-        HTMLResponse: HTML-страница с формой для управления фабриками, участками, оборудованием и получения иерархии.
-    """
+    """HTML-интерфейс для управления справочниками."""
     return HTMLResponse(content=html_content)
 
 
 @app.get('/ping', tags=['Health'])
 async def ping():
-    """Проверяет доступность API.
-
-    Returns:
-        dict: Сообщение с подтверждением работоспособности API.
-    """
+    """Проверка доступности API."""
     return {'message': 'pong'}
