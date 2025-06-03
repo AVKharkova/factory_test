@@ -11,9 +11,12 @@ router = APIRouter(
     tags=['hierarchy'],
 )
 
+
 @router.get('/', response_model=schemas.HierarchyResponse)
 def get_entity_hierarchy(
-    entity_type: Literal['factory', 'section', 'equipment'] = Query(..., description='Тип сущности'),
+    entity_type: Literal['factory', 'section', 'equipment'] = Query(
+        ..., description='Тип сущности'
+    ),
     entity_id: int = Query(..., description='ID сущности'),
     db: Session = Depends(get_db)
 ):
@@ -43,7 +46,12 @@ def get_entity_hierarchy(
             parents = crud.get_parents_for_equipment(db, entity_id)
 
     if not entity:
-        raise HTTPException(status_code=404, detail=f'{entity_type.capitalize()} с ID {entity_id} не найден(а)')
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f'{entity_type.capitalize()} с ID {entity_id} не найден(а)'
+            ),
+        )
 
     return schemas.HierarchyResponse(
         entity_type=entity_type,

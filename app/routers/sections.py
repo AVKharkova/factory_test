@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 from .. import crud, schemas
 from ..database import get_db
 from ..exceptions import (
-    NotFoundError, DuplicateError, RelatedEntityNotFoundError,
-    DependentActiveChildError, AlreadyInactiveError, AlreadyActiveError
+    AlreadyActiveError, AlreadyInactiveError, DependentActiveChildError,
+    DuplicateError, NotFoundError, RelatedEntityNotFoundError
 )
 
 router = APIRouter(
