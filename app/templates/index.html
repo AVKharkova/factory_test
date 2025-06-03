@@ -23,12 +23,24 @@
                 <ul id="factoriesList" class="item-list"></ul>
                 <div id="factoryResponse" class="response-area"></div>
 
-                <form id="createFactoryForm" class="create-form" onsubmit="handleDataFormSubmit(event, 'POST', 'factories', 'factoryResponse')">
-                    <h3>Создать фабрику</h3>
-                    <label for="factory_name_create">Наименование:</label>
-                    <input type="text" id="factory_name_create" name="name" required>
-                    <button type="submit">Создать</button>
-                </form>
+                <details class="form-details-container">
+                    <summary><h3>Создать фабрику</h3></summary>
+                    <form id="createFactoryForm" class="create-form" onsubmit="handleDataFormSubmit(event, 'POST', 'factories', 'factoryResponse')">
+                        <label for="factory_name_create">Наименование:</label>
+                        <input type="text" id="factory_name_create" name="name" required>
+                        <button type="submit">Создать</button>
+                    </form>
+                </details>
+
+                <details id="updateFactoryFormContainer" class="form-details-container">
+                    <summary><h3>Редактировать фабрику</h3></summary>
+                    <form id="updateFactoryForm" onsubmit="handleDataFormSubmit(event, 'PUT', 'factories', 'factoryResponse')">
+                        <input type="hidden" name="id">
+                        <label for="factory_name_update">Новое наименование:</label>
+                        <input type="text" id="factory_name_update" name="name">
+                        <button type="submit">Обновить</button>
+                    </form>
+                </details>
             </div>
 
             <!-- Участки -->
@@ -42,20 +54,33 @@
                 <ul id="sectionsList" class="item-list"></ul>
                 <div id="sectionResponse" class="response-area"></div>
 
-                <form id="createSectionForm" class="create-form" onsubmit="handleDataFormSubmit(event, 'POST', 'sections', 'sectionResponse')">
-                    <h3>Создать участок</h3>
-                    <label for="section_name_create">Наименование:</label>
-                    <input type="text" id="section_name_create" name="name" required>
-                    <label for="factory_id_section_create_select">Активная фабрика:</label>
-                    <select id="factory_id_section_create_select" name="factory_id" required>
-                        <option value="">Выберите фабрику</option>
-                    </select>
-                    <label for="equipment_ids_section_create_select">Активное оборудование (Ctrl/Cmd для выбора):</label>
-                    <select id="equipment_ids_section_create_select" name="equipment_ids" multiple>
-                        <option value="">Выберите оборудование</option>
-                    </select>
-                    <button type="submit">Создать</button>
-                </form>
+                <details class="form-details-container">
+                    <summary><h3>Создать участок</h3></summary>
+                    <form id="createSectionForm" class="create-form" onsubmit="handleDataFormSubmit(event, 'POST', 'sections', 'sectionResponse')">
+                        <label for="section_name_create">Наименование:</label>
+                        <input type="text" id="section_name_create" name="name" required>
+                        <label for="factory_id_section_create_select">Активная фабрика:</label>
+                        <select id="factory_id_section_create_select" name="factory_id" required>
+                            <option value="">Выберите фабрику</option>
+                        </select>
+                        <label for="equipment_ids_section_create_select">Активное оборудование (Ctrl/Cmd для выбора):</label>
+                        <select id="equipment_ids_section_create_select" name="equipment_ids" multiple size="3"></select>
+                        <button type="submit">Создать</button>
+                    </form>
+                </details>
+                <details id="updateSectionFormContainer" class="form-details-container">
+                     <summary><h3>Редактировать участок</h3></summary>
+                    <form id="updateSectionForm" onsubmit="handleDataFormSubmit(event, 'PUT', 'sections', 'sectionResponse')">
+                        <input type="hidden" name="id">
+                        <label for="section_name_update">Новое наименование:</label>
+                        <input type="text" id="section_name_update" name="name">
+                        <label for="factory_id_section_update_select">Новая активная фабрика:</label>
+                        <select id="factory_id_section_update_select" name="factory_id"></select>
+                        <label for="equipment_ids_section_update_select">Новое активное оборудование (Ctrl/Cmd для выбора):</label>
+                        <select id="equipment_ids_section_update_select" name="equipment_ids" multiple size="3"></select>
+                        <button type="submit">Обновить</button>
+                    </form>
+                </details>
             </div>
 
             <!-- Оборудование -->
@@ -69,29 +94,43 @@
                 <ul id="equipmentList" class="item-list"></ul>
                 <div id="equipmentResponse" class="response-area"></div>
 
-                <form id="createEquipmentForm" class="create-form" onsubmit="handleDataFormSubmit(event, 'POST', 'equipment', 'equipmentResponse')">
-                    <h3>Создать оборудование</h3>
-                    <label for="equipment_name_create">Наименование:</label>
-                    <input type="text" id="equipment_name_create" name="name" required>
-                    <label for="equipment_description_create">Описание:</label>
-                    <textarea id="equipment_description_create" name="description"></textarea>
-                    <label for="section_ids_equipment_create_select">Активные участки (Ctrl/Cmd для выбора):</label>
-                    <select id="section_ids_equipment_create_select" name="section_ids" multiple>
-                        <option value="">Выберите участки</option>
-                    </select>
-                    <button type="submit">Создать</button>
-                </form>
+                <details class="form-details-container">
+                    <summary><h3>Создать оборудование</h3></summary>
+                    <form id="createEquipmentForm" class="create-form" onsubmit="handleDataFormSubmit(event, 'POST', 'equipment', 'equipmentResponse')">
+                        <label for="equipment_name_create">Наименование:</label>
+                        <input type="text" id="equipment_name_create" name="name" required>
+                        <label for="equipment_description_create">Описание:</label>
+                        <textarea id="equipment_description_create" name="description"></textarea>
+                        <label for="section_ids_equipment_create_select">Активные участки (Ctrl/Cmd для выбора):</label>
+                        <select id="section_ids_equipment_create_select" name="section_ids" multiple size="3"></select>
+                        <button type="submit">Создать</button>
+                    </form>
+                </details>
+                
+                <details id="updateEquipmentFormContainer" class="form-details-container">
+                    <summary><h3>Редактировать оборудование</h3></summary>
+                    <form id="updateEquipmentForm" onsubmit="handleDataFormSubmit(event, 'PUT', 'equipment', 'equipmentResponse')">
+                        <input type="hidden" name="id">
+                        <label for="equipment_name_update">Новое наименование:</label>
+                        <input type="text" id="equipment_name_update" name="name">
+                        <label for="equipment_description_update">Новое описание:</label>
+                        <textarea id="equipment_description_update" name="description"></textarea>
+                        <label for="section_ids_equipment_update_select">Новые активные участки (Ctrl/Cmd для выбора):</label>
+                        <select id="section_ids_equipment_update_select" name="section_ids" multiple size="3"></select>
+                        <button type="submit">Обновить</button>
+                    </form>
+                </details>
             </div>
         </div>
 
         <!-- Иерархия -->
-        <div class="grid-item">
+        <div class="grid-item full-width-item">
             <h2>Иерархия</h2>
             <form id="hierarchyForm" onsubmit="submitHierarchyForm(event)">
                 <h3>Получить иерархию</h3>
                 <label for="entity_type_hierarchy">Тип сущности:</label>
                 <select id="entity_type_hierarchy" name="entity_type" required>
-                    <option value="">Выберите тип</option>
+                    <option value="" disabled selected>Выберите тип</option>
                     <option value="factory">Фабрика</option>
                     <option value="section">Участок</option>
                     <option value="equipment">Оборудование</option>

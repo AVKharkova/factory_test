@@ -65,25 +65,63 @@ API для управления иерархической справочной 
     *   **Документация API (Swagger UI):** `http://localhost:8000/docs`
     *   **Альтернативная документация (ReDoc):** `http://localhost:8000/redoc`
 
+### Тестирование
+
+    Проект включает два основных подхода к тестированию API:
+
+#### 1. Автоматизированные тесты с Pytest
+
+    В директории `tests/` находятся автоматизированные тесты, написанные с использованием фреймворка `pytest` и `TestClient` от FastAPI. Эти тесты проверяют основные CRUD-операции, логику активации/деактивации, обработку ошибок и получение иерархии для всех сущностей.
+
+**Запуск Pytest тестов:**
+    Из корневой директории проекта, с активированным виртуальным окружением:
+    ```bash
+    pytest
+    ```
+    Или с большей детализацией:
+    ```bash
+    pytest -v
+    ```
+
+Тесты используют отдельную базу данных test_spravochniki.db, которая создается и обновляется миграциями Alembic автоматически перед каждой тестовой сессией (см. tests/conftest.py).
+
+#### 2. Тестирование с Postman
+В директории tests/ также находится файл Postman.json. Это коллекция
+запросов Postman для ручного или полуавтоматического тестирования API.
+
+**Использование коллекции Postman:**
+* Установите Postman.
+* Запустите FastAPI приложение (см. "Запуск приложения").
+* В Postman нажмите "Import" и выберите файл tests/Postman.json.
+* Коллекция "Справочники API" появится в рабочем пространстве.
+* Выполняйте запросы, проверяйте ответы и используйте переменные окружения Postman.
+
+**Коллекция включает запросы для:**
+* CRUD операций для фабрик, участков и оборудования.
+* Эндпоинтов активации/деактивации.
+* Получения иерархии.
+
 ### Запуск через Docker
 
 1. **Собрать и запустить контейнер:**
     Убедитесь, что у вас установлен Docker. В корневой директории проекта выполните команды:
     ```bash
-    docker build -t factory_test
-    docker run -d -p 8000:8000 --name factory_test factory_test
+    docker build -t factory_test .
+    docker run -d -p 8000:8000 --name factory_test_container factory_test
     ```
     Приложение будет доступно по адресу http://localhost:8000. Миграции Alembic
-применяются автоматически при старте контейнера.
+применяются автоматически при старте контейнера. Примечание: Данные SQLite
+по умолчанию сохраняются внутри контейнера и теряются при его удалении.
+См. раздел "Сохранение данных SQLite в Docker" для сохранения данных.
 
 2. **Остановить контейнер:**
     ```bash
-    docker stop factory_test
+    docker stop factory_test_container
     ```
 
 3. **Удаление контейнера:**
     ```bash
-    docker rm factory_test
+    docker rm factory_test_container
     ```
 
 ### Сохранение данных SQLite в Docker
@@ -98,13 +136,14 @@ API для управления иерархической справочной 
 
 2. **Запустите контейнер с Volume:**
    ```bash
-   docker run -d -p 8000:8000 \
-     --name factory-test-app \
-     -v factory_test_db_data:/app/db_volume \
-     factory-test-api
+    docker run -d -p 8000:8000 \
+    --name factory_test_container \
+    -v factory_test_db_data:/app/db_volume \
+    --env SQLALCHEMY_DATABASE_URL=sqlite:////app/db_volume/spravochniki.db \
+    factory_test
    ```
-   Измените `SQLALCHEMY_DATABASE_URL` на
-   `sqlite:////app/db_volume/spravochniki.db`.
+    Убедитесь, что приложение поддерживает динамическое задание SQLALCHEMY_DATABASE_URL 
+    через переменную окружения (см. app/database.py).
 
 ---
 ## Автор
