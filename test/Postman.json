@@ -1,0 +1,179 @@
+{
+  "info": {
+    "_postman_id": "crud-api-collection",
+    "name": "Справочники API (factories, sections, equipment)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Factories CRUD",
+      "item": [
+        {
+          "name": "Create factory",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"name\": \"Factory #1\" }" },
+            "url": { "raw": "http://localhost:8000/factories/", "host": ["localhost"], "port": "8000", "path": ["factories", ""] }
+          }
+        },
+        {
+          "name": "Get factories list",
+          "request": { "method": "GET", "url": { "raw": "http://localhost:8000/factories/", "host": ["localhost"], "port": "8000", "path": ["factories", ""] } }
+        },
+        {
+          "name": "Get factory by ID",
+          "request": { "method": "GET", "url": { "raw": "http://localhost:8000/factories/1", "host": ["localhost"], "port": "8000", "path": ["factories", "1"] } }
+        },
+        {
+          "name": "Update factory",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"name\": \"Factory #1 updated\" }" },
+            "url": { "raw": "http://localhost:8000/factories/1", "host": ["localhost"], "port": "8000", "path": ["factories", "1"] }
+          }
+        },
+        {
+          "name": "Soft delete factory",
+          "request": { "method": "DELETE", "url": { "raw": "http://localhost:8000/factories/1", "host": ["localhost"], "port": "8000", "path": ["factories", "1"] } }
+        },
+        {
+          "name": "Activate factory",
+          "request": { "method": "PUT", "url": { "raw": "http://localhost:8000/factories/1/activate", "host": ["localhost"], "port": "8000", "path": ["factories", "1", "activate"] } }
+        }
+      ]
+    },
+    {
+      "name": "Sections CRUD",
+      "item": [
+        {
+          "name": "Create section",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"name\": \"Section #1\", \"factory_id\": 1 }" },
+            "url": { "raw": "http://localhost:8000/sections/", "host": ["localhost"], "port": "8000", "path": ["sections", ""] }
+          }
+        },
+        {
+          "name": "Get sections list",
+          "request": { "method": "GET", "url": { "raw": "http://localhost:8000/sections/", "host": ["localhost"], "port": "8000", "path": ["sections", ""] } }
+        },
+        {
+          "name": "Get section by ID",
+          "request": { "method": "GET", "url": { "raw": "http://localhost:8000/sections/1", "host": ["localhost"], "port": "8000", "path": ["sections", "1"] } }
+        },
+        {
+          "name": "Update section",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"name\": \"Section #1 updated\" }" },
+            "url": { "raw": "http://localhost:8000/sections/1", "host": ["localhost"], "port": "8000", "path": ["sections", "1"] }
+          }
+        },
+        {
+          "name": "Soft delete section",
+          "request": { "method": "DELETE", "url": { "raw": "http://localhost:8000/sections/1", "host": ["localhost"], "port": "8000", "path": ["sections", "1"] } }
+        },
+        {
+          "name": "Activate section",
+          "request": { "method": "PUT", "url": { "raw": "http://localhost:8000/sections/1/activate", "host": ["localhost"], "port": "8000", "path": ["sections", "1", "activate"] } }
+        }
+      ]
+    },
+    {
+      "name": "Equipment CRUD",
+      "item": [
+        {
+          "name": "Create equipment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"name\": \"Equipment #1\", \"description\": \"desc\" }" },
+            "url": { "raw": "http://localhost:8000/equipment/", "host": ["localhost"], "port": "8000", "path": ["equipment", ""] }
+          }
+        },
+        {
+          "name": "Get equipment list",
+          "request": { "method": "GET", "url": { "raw": "http://localhost:8000/equipment/", "host": ["localhost"], "port": "8000", "path": ["equipment", ""] } }
+        },
+        {
+          "name": "Get equipment by ID",
+          "request": { "method": "GET", "url": { "raw": "http://localhost:8000/equipment/1", "host": ["localhost"], "port": "8000", "path": ["equipment", "1"] } }
+        },
+        {
+          "name": "Update equipment",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"name\": \"Equipment #1 updated\", \"description\": \"new desc\" }" },
+            "url": { "raw": "http://localhost:8000/equipment/1", "host": ["localhost"], "port": "8000", "path": ["equipment", "1"] }
+          }
+        },
+        {
+          "name": "Soft delete equipment",
+          "request": { "method": "DELETE", "url": { "raw": "http://localhost:8000/equipment/1", "host": ["localhost"], "port": "8000", "path": ["equipment", "1"] } }
+        },
+        {
+          "name": "Activate equipment",
+          "request": { "method": "PUT", "url": { "raw": "http://localhost:8000/equipment/1/activate", "host": ["localhost"], "port": "8000", "path": ["equipment", "1", "activate"] } }
+        }
+      ]
+    },
+    {
+      "name": "Hierarchy",
+      "item": [
+        {
+          "name": "Get hierarchy for factory",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:8000/hierarchy/?entity_type=factory&entity_id=1",
+              "host": ["localhost"],
+              "port": "8000",
+              "path": ["hierarchy", ""],
+              "query": [
+                { "key": "entity_type", "value": "factory" },
+                { "key": "entity_id", "value": "1" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get hierarchy for section",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:8000/hierarchy/?entity_type=section&entity_id=1",
+              "host": ["localhost"],
+              "port": "8000",
+              "path": ["hierarchy", ""],
+              "query": [
+                { "key": "entity_type", "value": "section" },
+                { "key": "entity_id", "value": "1" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get hierarchy for equipment",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:8000/hierarchy/?entity_type=equipment&entity_id=1",
+              "host": ["localhost"],
+              "port": "8000",
+              "path": ["hierarchy", ""],
+              "query": [
+                { "key": "entity_type", "value": "equipment" },
+                { "key": "entity_id", "value": "1" }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,349 +1,390 @@
-from sqlalchemy.orm import Session, joinedload, selectinload
+from typing import List, Optional, Type
+from sqlalchemy.orm import Session, selectinload
+
 from . import models, schemas
-from .exceptions import NotFoundError, RelatedEntityNotFoundError, DuplicateError
-from typing import List, Optional
+from .exceptions import (
+    NotFoundError,
+    RelatedEntityNotFoundError,
+    DuplicateError,
+    DependentActiveChildError,
+    AlreadyActiveError
+)
 
-# --- Операции CRUD для фабрик ---
-def get_factory(db: Session, factory_id: int) -> Optional[models.Factory]:
-    """Получает фабрику по её id."""
-    return db.query(models.Factory).filter(models.Factory.id == factory_id).first()
+
+def _get_active_entity(db: Session, model: Type[models.Base], entity_id: int) -> Optional[models.Base]:
+    """Получает активную сущность по её ID."""
+    return db.query(model).filter(model.id == entity_id, model.is_active == True).first()
 
 
-def get_factory_by_name(db: Session, name: str) -> Optional[models.Factory]:
+# --- CRUD для фабрик ---
+
+def get_factory(db: Session, factory_id: int, only_active: bool = True) -> Optional[models.Factory]:
+    """Получает фабрику по её ID."""
+    query = db.query(models.Factory).filter(models.Factory.id == factory_id)
+    if only_active:
+        query = query.filter(models.Factory.is_active == True)
+    return query.first()
+
+def get_factory_by_name(db: Session, name: str, only_active: bool = True) -> Optional[models.Factory]:
     """Получает фабрику по её наименованию."""
-    return db.query(models.Factory).filter(models.Factory.name == name).first()
+    query = db.query(models.Factory).filter(models.Factory.name == name)
+    if only_active:
+        query = query.filter(models.Factory.is_active == True)
+    return query.first()
 
-
-def get_factories(db: Session, skip: int = 0, limit: int = 100) -> List[models.Factory]:
+def get_factories(db: Session, skip: int = 0, limit: int = 100, only_active: bool = True) -> List[models.Factory]:
     """Получает список фабрик с пагинацией."""
-    return db.query(models.Factory).offset(skip).limit(limit).all()
-
+    query = db.query(models.Factory)
+    if only_active:
+        query = query.filter(models.Factory.is_active == True)
+    return query.order_by(models.Factory.id).offset(skip).limit(limit).all()
 
 def create_factory(db: Session, factory_data: schemas.FactoryCreate) -> models.Factory:
-    """Создаёт новую фабрику. """
-    if get_factory_by_name(db, factory_data.name):
-        raise DuplicateError(f"Фабрика с наименованием '{factory_data.name}' уже существует.")
-    db_factory = models.Factory(name=factory_data.name)
+    """Создаёт новую фабрику."""
+    existing_factory_any_status = db.query(models.Factory).filter(models.Factory.name == factory_data.name).first()
+    if existing_factory_any_status:
+        raise DuplicateError(f'Фабрика с наименованием "{factory_data.name}" уже существует (возможно, деактивирована).')
+    db_factory = models.Factory(name=factory_data.name, is_active=True)
     db.add(db_factory)
     db.commit()
     db.refresh(db_factory)
     return db_factory
 
-
-def update_factory(db: Session, factory_id: int, factory_data: schemas.FactoryUpdate) -> Optional[models.Factory]:
-    """Обновляет фабрику."""
-    db_factory = get_factory(db, factory_id)
+def update_factory(db: Session, factory_id: int, factory_data: schemas.FactoryUpdate) -> models.Factory:
+    """Обновляет данные активной фабрики."""
+    db_factory = _get_active_entity(db, models.Factory, factory_id)
     if not db_factory:
-        raise NotFoundError(f"Фабрика с id {factory_id} не найдена.")
-
+        raise NotFoundError(f'Активная фабрика с ID {factory_id} не найдена.')
     if factory_data.name is not None and factory_data.name != db_factory.name:
-        existing_factory = get_factory_by_name(db, factory_data.name)
-        if existing_factory and existing_factory.id != factory_id:
-            raise DuplicateError(f"Фабрика с наименованием '{factory_data.name}' уже существует.")
+        existing_factory_any_status = db.query(models.Factory).filter(
+            models.Factory.name == factory_data.name,
+            models.Factory.id != factory_id
+        ).first()
+        if existing_factory_any_status:
+            raise DuplicateError(f'Фабрика с наименованием "{factory_data.name}" уже существует (возможно, деактивирована).')
         db_factory.name = factory_data.name
+    db.commit()
+    db.refresh(db_factory)
+    return db_factory
 
+def soft_delete_factory(db: Session, factory_id: int) -> models.Factory:
+    """Мягко удаляет (деактивирует) фабрику."""
+    db_factory = _get_active_entity(db, models.Factory, factory_id)
+    if not db_factory:
+        raise NotFoundError(f'Активная фабрика с ID {factory_id} не найдена.')
+    active_sections_count = db.query(models.Section).filter(
+        models.Section.factory_id == factory_id,
+        models.Section.is_active == True
+    ).count()
+    if active_sections_count > 0:
+        raise DependentActiveChildError(
+            f'Нельзя деактивировать фабрику ID {factory_id}, есть {active_sections_count} активных участков.'
+        )
+    db_factory.is_active = False
     db.commit()
     db.refresh(db_factory)
     return db_factory
 
 
-def delete_factory(db: Session, factory_id: int) -> Optional[models.Factory]:
-    """Удаляет фабрику. """
-    db_factory = get_factory(db, factory_id)
-    if not db_factory:
-        raise NotFoundError(f"Фабрика с id {factory_id} не найдена.")
-    db.delete(db_factory)
-    db.commit()
-    return db_factory
+# --- CRUD для оборудования ---
 
+def get_equipment(db: Session, equipment_id: int, only_active: bool = True) -> Optional[models.Equipment]:
+    """Получает оборудование по его ID с загрузкой связанных участков."""
+    query = db.query(models.Equipment).options(
+        selectinload(models.Equipment.sections)
+    ).filter(models.Equipment.id == equipment_id)
+    if only_active:
+        query = query.filter(models.Equipment.is_active == True)
+    return query.first()
 
-# --- Операции CRUD для оборудования ---
-def get_equipment(db: Session, equipment_id: int) -> Optional[models.Equipment]:
-    """Получает оборудование по его id."""
-    return db.query(models.Equipment).options(selectinload(models.Equipment.sections)).filter(models.Equipment.id == equipment_id).first()
-
-
-def get_equipment_by_name(db: Session, name: str) -> Optional[models.Equipment]:
+def get_equipment_by_name(db: Session, name: str, only_active: bool = True) -> Optional[models.Equipment]:
     """Получает оборудование по его наименованию."""
-    return db.query(models.Equipment).filter(models.Equipment.name == name).first()
+    query = db.query(models.Equipment).filter(models.Equipment.name == name)
+    if only_active:
+        query = query.filter(models.Equipment.is_active == True)
+    return query.first()
 
-
-def get_equipment_list(db: Session, skip: int = 0, limit: int = 100) -> List[models.Equipment]:
+def get_equipment_list(db: Session, skip: int = 0, limit: int = 100, only_active: bool = True) -> List[models.Equipment]:
     """Получает список оборудования с пагинацией."""
-    return db.query(models.Equipment).offset(skip).limit(limit).all()
-
+    query = db.query(models.Equipment)
+    if only_active:
+        query = query.filter(models.Equipment.is_active == True)
+    return query.order_by(models.Equipment.id).offset(skip).limit(limit).all()
 
 def create_equipment(db: Session, equipment_data: schemas.EquipmentCreate) -> models.Equipment:
-    """Создаёт новое оборудование и связывает его с указанными участками. """
-    if get_equipment_by_name(db, equipment_data.name):
-        raise DuplicateError(f"Оборудование с наименованием '{equipment_data.name}' уже существует.")
-
-    db_equipment = models.Equipment(name=equipment_data.name, description=equipment_data.description)
-    
+    """Создаёт новое оборудование с привязкой к участкам."""
+    existing_equipment_any_status = db.query(models.Equipment).filter(models.Equipment.name == equipment_data.name).first()
+    if existing_equipment_any_status:
+        raise DuplicateError(f'Оборудование с наименованием "{equipment_data.name}" уже существует (возможно, деактивировано).')
+    db_equipment = models.Equipment(
+        name=equipment_data.name,
+        description=equipment_data.description,
+        is_active=True
+    )
     found_sections = []
-    missing_section_ids = []
+    missing_or_inactive_section_ids = []
     if equipment_data.section_ids:
         for section_id in equipment_data.section_ids:
-            section = get_section(db, section_id)
+            section = _get_active_entity(db, models.Section, section_id)
             if section:
                 found_sections.append(section)
             else:
-                missing_section_ids.append(section_id)
-        
-        if missing_section_ids:
-            raise RelatedEntityNotFoundError(f"Участки с id {missing_section_ids} не найдены.")
+                missing_or_inactive_section_ids.append(section_id)
+        if missing_or_inactive_section_ids:
+            raise RelatedEntityNotFoundError(f'Активные участки с ID {missing_or_inactive_section_ids} не найдены.')
         db_equipment.sections.extend(found_sections)
-
     db.add(db_equipment)
     db.commit()
     db.refresh(db_equipment)
     return db_equipment
 
-
-def update_equipment(db: Session, equipment_id: int, equipment_data: schemas.EquipmentUpdate) -> Optional[models.Equipment]:
-    """Обновляет оборудование."""
-    db_equipment = get_equipment(db, equipment_id)
+def update_equipment(db: Session, equipment_id: int, equipment_data: schemas.EquipmentUpdate) -> models.Equipment:
+    """Обновляет данные активного оборудования."""
+    db_equipment = _get_active_entity(db, models.Equipment, equipment_id)
     if not db_equipment:
-        raise NotFoundError(f"Оборудование с id {equipment_id} не найдено.")
-
+        raise NotFoundError(f'Активное оборудование с ID {equipment_id} не найдено.')
     if equipment_data.name is not None and equipment_data.name != db_equipment.name:
-        existing_equipment = get_equipment_by_name(db, equipment_data.name)
-        if existing_equipment and existing_equipment.id != equipment_id:
-            raise DuplicateError(f"Оборудование с наименованием '{equipment_data.name}' уже существует.")
+        existing_equipment_any_status = db.query(models.Equipment).filter(
+            models.Equipment.name == equipment_data.name,
+            models.Equipment.id != equipment_id
+        ).first()
+        if existing_equipment_any_status:
+            raise DuplicateError(f'Оборудование с наименованием "{equipment_data.name}" уже существует (возможно, деактивировано).')
         db_equipment.name = equipment_data.name
-    
     if equipment_data.description is not None:
         db_equipment.description = equipment_data.description
-
-    if equipment_data.section_ids is not None: 
+    if equipment_data.section_ids is not None:
         new_sections = []
-        missing_section_ids = []
+        missing_or_inactive_section_ids = []
         if equipment_data.section_ids:
             for section_id in equipment_data.section_ids:
-                section = get_section(db, section_id)
+                section = _get_active_entity(db, models.Section, section_id)
                 if section:
                     new_sections.append(section)
                 else:
-                    missing_section_ids.append(section_id)
-            
-            if missing_section_ids:
-                raise RelatedEntityNotFoundError(f"Участки с id {missing_section_ids} не найдены при обновлении оборудования.")
-        
-        db_equipment.sections = new_sections  # Заменяем список участков
+                    missing_or_inactive_section_ids.append(section_id)
+            if missing_or_inactive_section_ids:
+                raise RelatedEntityNotFoundError(f'Активные участки с ID {missing_or_inactive_section_ids} не найдены при обновлении оборудования.')
+        db_equipment.sections = new_sections
+    db.commit()
+    db.refresh(db_equipment)
+    return db_equipment
 
+def soft_delete_equipment(db: Session, equipment_id: int) -> models.Equipment:
+    """Мягко удаляет (деактивирует) оборудование."""
+    db_equipment = _get_active_entity(db, models.Equipment, equipment_id)
+    if not db_equipment:
+        raise NotFoundError(f'Активное оборудование с ID {equipment_id} не найдено.')
+    db_equipment.is_active = False
     db.commit()
     db.refresh(db_equipment)
     return db_equipment
 
 
-def delete_equipment(db: Session, equipment_id: int) -> Optional[models.Equipment]:
-    """Удаляет оборудование."""
-    db_equipment = get_equipment(db, equipment_id)
-    if not db_equipment:
-        raise NotFoundError(f"Оборудование с id {equipment_id} не найдено.")
-    db.delete(db_equipment)
-    db.commit()
-    return db_equipment
+# --- CRUD для участков ---
 
-
-# --- Операции CRUD для участков ---
-def get_section(db: Session, section_id: int) -> Optional[models.Section]:
-    """Получает участок по его id."""
-    return db.query(models.Section).options(
-        selectinload(models.Section.factory), 
+def get_section(db: Session, section_id: int, only_active: bool = True) -> Optional[models.Section]:
+    """Получает участок по его ID с загрузкой связанных фабрики и оборудования."""
+    query = db.query(models.Section).options(
+        selectinload(models.Section.factory),
         selectinload(models.Section.equipment)
-    ).filter(models.Section.id == section_id).first()
+    ).filter(models.Section.id == section_id)
+    if only_active:
+        query = query.filter(models.Section.is_active == True)
+    return query.first()
 
+def get_section_by_name_and_factory(db: Session, name: str, factory_id: int, only_active: bool = True) -> Optional[models.Section]:
+    """Получает участок по наименованию и ID фабрики."""
+    query = db.query(models.Section).filter(
+        models.Section.name == name,
+        models.Section.factory_id == factory_id
+    )
+    if only_active:
+        query = query.filter(models.Section.is_active == True)
+    return query.first()
 
-def get_section_by_name_and_factory(db: Session, name: str, factory_id: int) -> Optional[models.Section]:
-    """Получает участок по имени и id фабрики."""
-    return db.query(models.Section).filter(models.Section.name == name, models.Section.factory_id == factory_id).first()
-
-
-def get_sections(db: Session, skip: int = 0, limit: int = 100) -> List[models.Section]:
+def get_sections(db: Session, skip: int = 0, limit: int = 100, only_active: bool = True) -> List[models.Section]:
     """Получает список участков с пагинацией."""
-    return db.query(models.Section).offset(skip).limit(limit).all()
-
+    query = db.query(models.Section)
+    if only_active:
+        query = query.filter(models.Section.is_active == True)
+    return query.order_by(models.Section.id).offset(skip).limit(limit).all()
 
 def create_section(db: Session, section_data: schemas.SectionCreate) -> models.Section:
-    """Создаёт новый участок и связывает его с фабрикой и оборудованием."""
-    factory = get_factory(db, section_data.factory_id)
+    """Создаёт новый участок с привязкой к фабрике и оборудованию."""
+    factory = _get_active_entity(db, models.Factory, section_data.factory_id)
     if not factory:
-        raise RelatedEntityNotFoundError(f"Фабрика с id {section_data.factory_id} не найдена.")
-
-    if get_section_by_name_and_factory(db, section_data.name, section_data.factory_id):
-        raise DuplicateError(f"Участок с наименованием '{section_data.name}' уже существует на фабрике id {section_data.factory_id}.")
-
-    db_section = models.Section(name=section_data.name, factory_id=section_data.factory_id)
-    
+        raise RelatedEntityNotFoundError(f'Активная фабрика с ID {section_data.factory_id} не найдена.')
+    if get_section_by_name_and_factory(db, section_data.name, section_data.factory_id, only_active=True):
+        raise DuplicateError(f'Активный участок с наименованием "{section_data.name}" уже существует на фабрике ID {section_data.factory_id}.')
+    db_section = models.Section(
+        name=section_data.name,
+        factory_id=section_data.factory_id,
+        is_active=True
+    )
     found_equipment = []
-    missing_equipment_ids = []
+    missing_or_inactive_equipment_ids = []
     if section_data.equipment_ids:
         for eq_id in section_data.equipment_ids:
-            equipment_item = get_equipment(db, eq_id)
+            equipment_item = _get_active_entity(db, models.Equipment, eq_id)
             if equipment_item:
                 found_equipment.append(equipment_item)
             else:
-                missing_equipment_ids.append(eq_id)
-        
-        if missing_equipment_ids:
-            raise RelatedEntityNotFoundError(f"Оборудование с id {missing_equipment_ids} не найдено.")
+                missing_or_inactive_equipment_ids.append(eq_id)
+        if missing_or_inactive_equipment_ids:
+            raise RelatedEntityNotFoundError(f'Активное оборудование с ID {missing_or_inactive_equipment_ids} не найдено.')
         db_section.equipment.extend(found_equipment)
-
     db.add(db_section)
     db.commit()
     db.refresh(db_section)
     return db_section
 
-
-def update_section(db: Session, section_id: int, section_data: schemas.SectionUpdate) -> Optional[models.Section]:
-    """Обновляет участок."""
-    db_section = get_section(db, section_id)
+def update_section(db: Session, section_id: int, section_data: schemas.SectionUpdate) -> models.Section:
+    """Обновляет данные активного участка."""
+    db_section = _get_active_entity(db, models.Section, section_id)
     if not db_section:
-        raise NotFoundError(f"Участок с id {section_id} не найден.")
-
+        raise NotFoundError(f'Активный участок с ID {section_id} не найден.')
     target_factory_id = db_section.factory_id
     if section_data.factory_id is not None and section_data.factory_id != db_section.factory_id:
-        new_factory = get_factory(db, section_data.factory_id)
+        new_factory = _get_active_entity(db, models.Factory, section_data.factory_id)
         if not new_factory:
-            raise RelatedEntityNotFoundError(f"Новая фабрика с id {section_data.factory_id} не найдена.")
+            raise RelatedEntityNotFoundError(f'Новая активная фабрика с ID {section_data.factory_id} не найдена.')
         target_factory_id = new_factory.id
         db_section.factory_id = new_factory.id
-
     target_name = db_section.name
-    if section_data.name is not None and section_data.name != db_section.name:
+    if section_data.name is not None:
         target_name = section_data.name
-    
     if (section_data.name is not None and section_data.name != db_section.name) or \
        (section_data.factory_id is not None and section_data.factory_id != db_section.factory_id):
-        existing_section = get_section_by_name_and_factory(db, target_name, target_factory_id)
+        existing_section = get_section_by_name_and_factory(db, target_name, target_factory_id, only_active=True)
         if existing_section and existing_section.id != section_id:
-            raise DuplicateError(f"Участок с наименованием '{target_name}' уже существует на фабрике id {target_factory_id}.")
-    
+            raise DuplicateError(f'Активный участок с наименованием "{target_name}" уже существует на фабрике ID {target_factory_id}.')
     if section_data.name is not None:
         db_section.name = section_data.name
-
     if section_data.equipment_ids is not None:
         new_equipment_list = []
-        missing_equipment_ids = []
+        missing_or_inactive_equipment_ids = []
         if section_data.equipment_ids:
             for eq_id in section_data.equipment_ids:
-                equipment_item = get_equipment(db, eq_id)
+                equipment_item = _get_active_entity(db, models.Equipment, eq_id)
                 if equipment_item:
                     new_equipment_list.append(equipment_item)
                 else:
-                    missing_equipment_ids.append(eq_id)
-            
-            if missing_equipment_ids:
-                raise RelatedEntityNotFoundError(f"Оборудование с id {missing_equipment_ids} не найдено при обновлении участка.")
-        
-        db_section.equipment = new_equipment_list  # Заменяем список оборудования
+                    missing_or_inactive_equipment_ids.append(eq_id)
+            if missing_or_inactive_equipment_ids:
+                raise RelatedEntityNotFoundError(f'Активное оборудование с ID {missing_or_inactive_equipment_ids} не найдено при обновлении участка.')
+        db_section.equipment = new_equipment_list
+    db.commit()
+    db.refresh(db_section)
+    return db_section
 
+def soft_delete_section(db: Session, section_id: int) -> models.Section:
+    """Мягко удаляет (деактивирует) участок."""
+    db_section = _get_active_entity(db, models.Section, section_id)
+    if not db_section:
+        raise NotFoundError(f'Активный участок с ID {section_id} не найден.')
+    problematic_equipment_names = []
+    for eq in db_section.equipment:
+        other_active_sections_count = db.query(models.Section).join(models.section_equipment_association_table).filter(
+            models.section_equipment_association_table.c.equipment_id == eq.id,
+            models.Section.is_active == True,
+            models.Section.id != section_id
+        ).count()
+        if other_active_sections_count == 0:
+            problematic_equipment_names.append(eq.name)
+    if problematic_equipment_names:
+        raise DependentActiveChildError(
+            f'Нельзя деактивировать участок ID {section_id}, следующее активное оборудование ({", ".join(problematic_equipment_names)}) останется без других активных участков.'
+        )
+    db_section.is_active = False
     db.commit()
     db.refresh(db_section)
     return db_section
 
 
-def delete_section(db: Session, section_id: int) -> Optional[models.Section]:
-    """Удаляет участок."""
-    db_section = get_section(db, section_id)
-    if not db_section:
-        raise NotFoundError(f"Участок с id {section_id} не найден.")
-    db.delete(db_section)
-    db.commit()
-    return db_section
-
+# --- Иерархия ---
 
 def get_parents_for_equipment(db: Session, equipment_id: int) -> List[schemas.HierarchyParent]:
-    """Получает всех родительских объектов для оборудования (участки и фабрики)."""
+    """Получает список родительских сущностей для оборудования."""
     parents = []
-    equipment = db.query(models.Equipment).options(
-        selectinload(models.Equipment.sections).selectinload(models.Section.factory)
-    ).filter(models.Equipment.id == equipment_id).first()
-    
+    equipment = _get_active_entity(db, models.Equipment, equipment_id)
     if not equipment:
         return parents
-
-    # Родители 0-го уровня: участки
-    processed_factories = set()  # уникальность
+    processed_factories = set()
     for section in equipment.sections:
         parents.append(schemas.HierarchyParent(type='section', id=section.id, name=section.name))
-        # Родители 1-го уровня: фабрика участка
-        if section.factory and section.factory.id not in processed_factories:
-            parents.append(
-                schemas.HierarchyParent(type='factory', id=section.factory.id, name=section.factory.name))
+        if section.factory and section.factory.is_active and section.factory.id not in processed_factories:
+            parents.append(schemas.HierarchyParent(type='factory', id=section.factory.id, name=section.factory.name))
             processed_factories.add(section.factory.id)
     return parents
 
-
 def get_parents_for_section(db: Session, section_id: int) -> List[schemas.HierarchyParent]:
-    """Получает всех родительских объектов для участка (фабрика)."""
+    """Получает список родительских сущностей для участка."""
     parents = []
-    # Используем selectinload для фабрики
-    section = db.query(models.Section).options(selectinload(models.Section.factory)).filter(
-        models.Section.id == section_id).first()
-    
+    section = _get_active_entity(db, models.Section, section_id)
     if not section:
         return parents
-
-    # Родитель 0-го уровня: фабрика
-    if section.factory:
+    if section.factory and section.factory.is_active:
         parents.append(schemas.HierarchyParent(type='factory', id=section.factory.id, name=section.factory.name))
     return parents
 
-
-def _get_equipment_for_sections(db: Session, section_ids: List[int]) -> List[schemas.HierarchyChild]:
-    """Вспомогательная функция: получает оборудование, связанное с указанными участками.
-    Эта функция не используется в текущей логике иерархии, но может быть полезна.
-    """
-    children_equipment = []
-    if not section_ids:
-        return children_equipment
-        
-    equipment_list = db.query(models.Equipment) \
-        .join(models.section_equipment_association_table) \
-        .filter(models.section_equipment_association_table.c.section_id.in_(section_ids)) \
-        .distinct().all()
-
-    for eq in equipment_list:
-        children_equipment.append(schemas.HierarchyChild(type='equipment', id=eq.id, name=eq.name, children=[]))
-    return children_equipment
-
-
 def get_children_for_factory(db: Session, factory_id: int) -> List[schemas.HierarchyChild]:
-    """Получает всех дочерних объектов для фабрики (участки и оборудование)."""
+    """Получает список дочерних сущностей для фабрики."""
     children = []
-    factory = db.query(models.Factory).options(
-        selectinload(models.Factory.sections).selectinload(models.Section.equipment)
-    ).filter(models.Factory.id == factory_id).first()
-    
+    factory = _get_active_entity(db, models.Factory, factory_id)
     if not factory:
         return children
-
-    # Дети 0-го уровня: Участки
     for section in factory.sections:
         section_child = schemas.HierarchyChild(type='section', id=section.id, name=section.name)
-        # Дети 1-го уровня (дети участка) оборудование
         equipment_children = []
-        if section.equipment:
-            for eq in section.equipment:
-                equipment_children.append(schemas.HierarchyChild(type='equipment', id=eq.id, name=eq.name, children=[]))
+        for eq in section.equipment:
+            equipment_children.append(schemas.HierarchyChild(type='equipment', id=eq.id, name=eq.name, children=[]))
         section_child.children = equipment_children
         children.append(section_child)
     return children
 
-
 def get_children_for_section(db: Session, section_id: int) -> List[schemas.HierarchyChild]:
-    """Получает всех дочерних объектов для участка (оборудование)."""
+    """Получает список дочерних сущностей для участка."""
     children = []
-    section = db.query(models.Section).options(selectinload(models.Section.equipment)).filter(
-        models.Section.id == section_id).first()
-
+    section = _get_active_entity(db, models.Section, section_id)
     if not section:
         return children
-
-    # Дети 0-го уровня: Оборудование
-    if section.equipment:
-        for eq in section.equipment:
-            children.append(schemas.HierarchyChild(type='equipment', id=eq.id, name=eq.name, children=[]))
+    for eq in section.equipment:
+        children.append(schemas.HierarchyChild(type='equipment', id=eq.id, name=eq.name, children=[]))
     return children
+
+def activate_factory(db: Session, factory_id: int) -> models.Factory:
+    """Активирует ранее деактивированную фабрику."""
+    db_factory = db.query(models.Factory).filter(models.Factory.id == factory_id).first()
+    if not db_factory:
+        raise NotFoundError(f'Фабрика с ID {factory_id} не найдена.')
+    if db_factory.is_active:
+        raise AlreadyActiveError(f'Фабрика с ID {factory_id} уже активна.')
+    db_factory.is_active = True
+    db.commit()
+    db.refresh(db_factory)
+    return db_factory
+
+def activate_section(db: Session, section_id: int) -> models.Section:
+    """Активирует ранее деактивированный участок."""
+    db_section = db.query(models.Section).filter(models.Section.id == section_id).first()
+    if not db_section:
+        raise NotFoundError(f'Участок с ID {section_id} не найден.')
+    if db_section.is_active:
+        raise AlreadyActiveError(f'Участок с ID {section_id} уже активен.')
+    db_section.is_active = True
+    db.commit()
+    db.refresh(db_section)
+    return db_section
+
+def activate_equipment(db: Session, equipment_id: int) -> models.Equipment:
+    """Активирует ранее деактивированное оборудование."""
+    db_equipment = db.query(models.Equipment).filter(models.Equipment.id == equipment_id).first()
+    if not db_equipment:
+        raise NotFoundError(f'Оборудование с ID {equipment_id} не найдено.')
+    if db_equipment.is_active:
+        raise AlreadyActiveError(f'Оборудование с ID {equipment_id} уже активно.')
+    db_equipment.is_active = True
+    db.commit()
+    db.refresh(db_equipment)
+    return db_equipment

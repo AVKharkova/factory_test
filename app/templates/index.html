@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Справочники</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/scripts.js" defer></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Управление справочниками</h1>
+
+        <div class="grid-container">
+            <!-- Фабрики -->
+            <div class="grid-item">
+                <h2>Фабрики</h2>
+                <div class="filter-form">
+                    <label for="includeInactiveFactories">Показывать неактивные:</label>
+                    <input type="checkbox" id="includeInactiveFactories" onchange="loadEntityList('factories', this.checked)">
+                </div>
+                <h4>Список фабрик</h4>
+                <ul id="factoriesList" class="item-list"></ul>
+                <div id="factoryResponse" class="response-area"></div>
+
+                <form id="createFactoryForm" class="create-form" onsubmit="handleDataFormSubmit(event, 'POST', 'factories', 'factoryResponse')">
+                    <h3>Создать фабрику</h3>
+                    <label for="factory_name_create">Наименование:</label>
+                    <input type="text" id="factory_name_create" name="name" required>
+                    <button type="submit">Создать</button>
+                </form>
+            </div>
+
+            <!-- Участки -->
+            <div class="grid-item">
+                <h2>Участки</h2>
+                <div class="filter-form">
+                    <label for="includeInactiveSections">Показывать неактивные:</label>
+                    <input type="checkbox" id="includeInactiveSections" onchange="loadEntityList('sections', this.checked)">
+                </div>
+                <h4>Список участков</h4>
+                <ul id="sectionsList" class="item-list"></ul>
+                <div id="sectionResponse" class="response-area"></div>
+
+                <form id="createSectionForm" class="create-form" onsubmit="handleDataFormSubmit(event, 'POST', 'sections', 'sectionResponse')">
+                    <h3>Создать участок</h3>
+                    <label for="section_name_create">Наименование:</label>
+                    <input type="text" id="section_name_create" name="name" required>
+                    <label for="factory_id_section_create_select">Активная фабрика:</label>
+                    <select id="factory_id_section_create_select" name="factory_id" required>
+                        <option value="">Выберите фабрику</option>
+                    </select>
+                    <label for="equipment_ids_section_create_select">Активное оборудование (Ctrl/Cmd для выбора):</label>
+                    <select id="equipment_ids_section_create_select" name="equipment_ids" multiple>
+                        <option value="">Выберите оборудование</option>
+                    </select>
+                    <button type="submit">Создать</button>
+                </form>
+            </div>
+
+            <!-- Оборудование -->
+            <div class="grid-item">
+                <h2>Оборудование</h2>
+                <div class="filter-form">
+                    <label for="includeInactiveEquipment">Показывать неактивные:</label>
+                    <input type="checkbox" id="includeInactiveEquipment" onchange="loadEntityList('equipment', this.checked)">
+                </div>
+                <h4>Список оборудования</h4>
+                <ul id="equipmentList" class="item-list"></ul>
+                <div id="equipmentResponse" class="response-area"></div>
+
+                <form id="createEquipmentForm" class="create-form" onsubmit="handleDataFormSubmit(event, 'POST', 'equipment', 'equipmentResponse')">
+                    <h3>Создать оборудование</h3>
+                    <label for="equipment_name_create">Наименование:</label>
+                    <input type="text" id="equipment_name_create" name="name" required>
+                    <label for="equipment_description_create">Описание:</label>
+                    <textarea id="equipment_description_create" name="description"></textarea>
+                    <label for="section_ids_equipment_create_select">Активные участки (Ctrl/Cmd для выбора):</label>
+                    <select id="section_ids_equipment_create_select" name="section_ids" multiple>
+                        <option value="">Выберите участки</option>
+                    </select>
+                    <button type="submit">Создать</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Иерархия -->
+        <div class="grid-item">
+            <h2>Иерархия</h2>
+            <form id="hierarchyForm" onsubmit="submitHierarchyForm(event)">
+                <h3>Получить иерархию</h3>
+                <label for="entity_type_hierarchy">Тип сущности:</label>
+                <select id="entity_type_hierarchy" name="entity_type" required>
+                    <option value="">Выберите тип</option>
+                    <option value="factory">Фабрика</option>
+                    <option value="section">Участок</option>
+                    <option value="equipment">Оборудование</option>
+                </select>
+                <label for="entity_id_hierarchy">ID сущности:</label>
+                <input type="number" id="entity_id_hierarchy" name="entity_id" required>
+                <button type="submit">Получить</button>
+            </form>
+            <div id="hierarchy_response" class="response-area"></div>
+        </div>
+    </div>
+</body>
+</html>

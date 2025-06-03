@@ -45,7 +45,7 @@ def upgrade() -> None:
                     sa.PrimaryKeyConstraint('id')
                     )
     op.create_index(op.f('ix_sections_id'), 'sections', ['id'], unique=False)
-    op.create_index(op.f('ix_sections_name'), 'sections', ['name'], unique=False)  # Имя участка не уникально глобально
+    op.create_index(op.f('ix_sections_name'), 'sections', ['name'], unique=False)
 
     op.create_table('section_equipment_association',
                     sa.Column('section_id', sa.Integer(), nullable=False),

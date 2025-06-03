@@ -1,17 +1,15 @@
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from .. import crud, schemas
 from ..database import get_db
-from ..exceptions import NotFoundError
 
 router = APIRouter(
     prefix='/hierarchy',
     tags=['hierarchy'],
 )
-
 
 @router.get('/', response_model=schemas.HierarchyResponse)
 def get_entity_hierarchy(
@@ -45,7 +43,7 @@ def get_entity_hierarchy(
             parents = crud.get_parents_for_equipment(db, entity_id)
 
     if not entity:
-        raise NotFoundError(f'{entity_type.capitalize()} с ID {entity_id} не найден(а)')
+        raise HTTPException(status_code=404, detail=f'{entity_type.capitalize()} с ID {entity_id} не найден(а)')
 
     return schemas.HierarchyResponse(
         entity_type=entity_type,
